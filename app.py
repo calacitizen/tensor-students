@@ -58,7 +58,7 @@ def api_ask():
     if  game['game_set']:
         board = chess.Board(game['game_set'])
         handler = chess.uci.InfoHandler()
-        engine = chess.uci.popen_engine('/Users/mraz/Projects/stockfish-9-mac/Mac/stockfish-9-64')
+        engine = chess.uci.popen_engine(os.getcwd() + '/stockfish-9-linux/Linux/stockfish-9-64')
         engine.info_handlers.append(handler)
         engine.position(board)
         moves = {}
