@@ -120,7 +120,7 @@ def api_ask():
         #    else:
         #        moves['variants'].append({"move": board.san(el), "score": round(handler.info["score"][1].cp/100.0,2), "mate": handler.info["score"][1].mate}) 
         #    moves['variants'].sort(key=operator.itemgetter('score'), reverse=True)
-        return jsonify(mock[game['game_set']])
+        return jsonify(mock[game['state']])
         #return jsonify(moves)
     else:
         return jsonify({'error': 'no params entered'})
