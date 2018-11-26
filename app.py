@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #----------------------------------------------------------------------------#
 # Imports
 #----------------------------------------------------------------------------#
@@ -43,6 +44,98 @@ def login_required(test):
 # Controllers.
 #----------------------------------------------------------------------------#
 
+question_types = {
+    'show_best_move': [
+        'Как мне лучше сходить',
+        'Куда можно сходить'
+    ]
+}
+
+question_by_piece = {
+    'p': ['пешкой', 'пешка'],
+    'k': ['король', 'королем', 'королём'],
+    'q': ['королева', 'королевой', 'ферзь', 'ферзём', 'ферзем'],
+    'r': ['ладья', 'ладьей', 'ладьёй'],
+    'b': ['слон', 'слоном', 'офицером', 'офицер'],
+    'n': ['конь', 'конем', 'конём', 'кобыла', 'кобылой']
+}
+
+answer_types = {
+   'mate': 'Если сходишь правильно, можешь поставить мат.',
+   'check': 'Не робей. Сделай шах!',
+   'danger_check': 'Кажется вам поставили шах.',
+   'you_done': 'Игра окончена вам поставили мат.',
+   'castling': 'Пожалуй стоит сделать рокировку.', 
+   'best_move': 'Вот лучшие ходы в данный момент.',
+   'capture': 'Я бы предложила съесть'
+}
+
+whereby = {
+    'p': 'пешкой',
+    'k': 'королём',
+    'q': 'ферзём',
+    'r': 'ладьёй',
+    'b': 'слоном',
+    'n': 'конём'
+}
+
+what = {
+    'p': 'пешку',
+    'k': 'короля',
+    'q': 'ферзя',
+    'r': 'ладью',
+    'b': 'слона',
+    'n': 'коня'
+}
+
+def init_board(fen_string):
+    board = chess.Board(fen_string)
+    handler = chess.uci.InfoHandler()
+    engine = chess.uci.popen_engine(os.getcwd() + '/stockfish-9-mac/Mac/stockfish-9-64')
+    engine.info_handlers.append(handler)
+    engine.position(board)
+    moves = {}
+    moves['turn'] = board.turn
+    moves['bestMoves'] = []
+    moves['possibleMoves'] = []
+    moves['answer'] = ''
+    return {'board': board, 'engine': engine, 'moves': moves, 'handler': handler}
+
+def get_cp(handler):
+    return handler.info["score"][1].cp
+
+def get_move(board, el):
+    return board.san(el)
+
+def get_mate(handler):
+    return handler.info["score"][1].mate
+
+def fill_best_moves(moves, board, mate, score, el):
+    moves['bestMoves'].append({"move": get_move(board, el), "score": score, "mate": mate})
+
+def is_question_asked(game):
+    return 'state' in game and 'question' in game
+
+def is_best_castling(best_moves):
+    return len(best_moves)and (best_moves[0]['move'] == "O-O" or best_moves[0]['move'] == "O-O-O") 
+
+def is_best_checkmate(best_moves):
+    return len(best_moves) and ("#" in best_moves[0]['move'])
+
+def is_best_check(best_moves):
+    return len(best_moves) and ("+" in best_moves[0]['move'])
+
+def is_best_capture(best_moves):
+    return len(best_moves) and ("x" in best_moves[0]['move'])
+
+def capture_answer(best_moves, board):
+    capture_split = best_moves[0]['move'].split('x')
+    piece = capture_split[0].lower()
+    piece_place = capture_split[1].capitalize()
+    piece_to_kill = board.piece_at(getattr(chess, piece_place)).symbol()
+    if piece not in whereby:
+        piece = 'p'
+    return answer_types['capture'] + ' ' + what[piece_to_kill] + ' на ' + piece_place + ' ' + whereby[piece] + '.'
 
 @app.route('/')
 def home():
@@ -55,28 +148,44 @@ def game():
 @app.route('/game/ask', methods=['POST'])
 def api_ask():
     game = request.get_json(force=True)
-    if  game['game_set']:
-        board = chess.Board(game['game_set'])
-        handler = chess.uci.InfoHandler()
-        engine = chess.uci.popen_engine(os.getcwd() + '/stockfish-9-linux/Linux/stockfish-9-64')
-        engine.info_handlers.append(handler)
-        engine.position(board)
-        moves = {}
-        moves['turn'] = board.turn
-        moves['variants'] = []
-        for el in board.legal_moves:
-            engine.go(searchmoves=[el],movetime=1000)
-            if (handler.info["score"][1].cp is None or isinstance(handler.info["score"][1].cp, float) ):
-                if handler.info["score"][1].mate == 1:
-                    moves['variants'].append({"move": board.san(el), "score": 9999, "mate": handler.info["score"][1].mate})
-                elif handler.info["score"][1].mate == -1:
-                    moves['variants'].append({"move": board.san(el), "score": -9999, "mate": handler.info["score"][1].mate})
+    if is_question_asked(game):
+        settings = init_board(game['state'])
+
+        for el in settings['board'].legal_moves:
+            settings['engine'].go(searchmoves=[el],movetime=10)
+            mate = get_mate(settings['handler'])
+            if (get_cp(settings['handler']) is None or isinstance(get_cp(settings['handler']), float) ):
+                if mate == 1:
+                    fill_best_moves(settings['moves'], settings['board'], mate, 9999, el)
                 else:
-                    moves['variants'].append({"move": board.san(el), "score": -9999, "mate": handler.info["score"][1].mate})
+                    fill_best_moves(settings['moves'], settings['board'], mate, -9999, el)
             else:
-                moves['variants'].append({"move": board.san(el), "score": round(handler.info["score"][1].cp/100.0,2), "mate": handler.info["score"][1].mate}) 
-            moves['variants'].sort(key=operator.itemgetter('score'), reverse=True)
-        return jsonify(moves)
+                fill_best_moves(settings['moves'], settings['board'], mate, round(get_cp(settings['handler'])/100.0,2), el)
+            settings['moves']['bestMoves'].sort(key=operator.itemgetter('score'), reverse=True)
+        
+
+        if is_best_capture(settings['moves']['bestMoves']):
+            settings['moves']['answer'] = capture_answer(settings['moves']['bestMoves'], settings['board'])
+
+        elif settings['board'].is_checkmate():
+            settings['moves']['answer'] = answer_types['you_done']
+            
+        elif settings['board'].is_check():
+            settings['moves']['answer'] = answer_types['danger_check']
+
+        elif is_best_castling(settings['moves']['bestMoves']):
+            settings['moves']['answer'] = answer_types['castling']
+
+        elif is_best_checkmate(settings['moves']['bestMoves']):
+            settings['moves']['answer'] = answer_types['mate']
+
+        elif is_best_check(settings['moves']['bestMoves']):
+            settings['moves']['answer'] = answer_types['check']
+    
+        else:
+            settings['moves']['answer'] = answer_types['best_move']
+
+        return jsonify(settings['moves'])
     else:
         return jsonify({'error': 'no params entered'})
 
