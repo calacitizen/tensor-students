@@ -5,6 +5,7 @@ WTForms
 coverage
 python-chess
 futures
+flask_cors
 # ecdsa
 # paramiko
 # pycrypto

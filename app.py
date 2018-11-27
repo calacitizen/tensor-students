@@ -11,6 +11,7 @@ import os
 import chess
 import chess.uci
 import operator
+from flask_cors import CORS
 
 #----------------------------------------------------------------------------#
 # App Config.
@@ -18,6 +19,7 @@ import operator
 
 app = Flask(__name__)
 app.config.from_object('config')
+cors = CORS(app, resources={r"/game/*": {"origins": "*"}})
 #db = SQLAlchemy(app)
 
 # Automatically tear down SQLAlchemy.
