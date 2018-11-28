@@ -103,7 +103,7 @@ def api_ask():
     if  'type' in game:
         if game['type'] == 'n':
             return jsonify(mock["rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2"])
-    if  'state' in game:
+    if  'state' in game and game['state'] in mock:
         #board = chess.Board(game['game_set'])
         #handler = chess.uci.InfoHandler()
         #engine = chess.uci.popen_engine(os.getcwd() + '/stockfish-9-mac/Mac/stockfish-9-64')
